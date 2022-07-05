@@ -1,0 +1,4 @@
+coverage[toml]==6.4.1
+poetry==1.2.0a2
+pytest==7.1.2
+pytest-sugar==0.9.4
