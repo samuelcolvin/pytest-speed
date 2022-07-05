@@ -21,14 +21,14 @@ stub_help = 'pytest-speed stub for pytest-benchmark, ignored'
 
 
 def pytest_addoption(parser: Any) -> None:
-    parser.addoption('--benchmark-columns', action='store', default='-', help=stub_help)
-    parser.addoption('--benchmark-group-by', action='store', default='-', help=stub_help)
-    parser.addoption('--benchmark-warmup', action='store', default='-', help=stub_help)
-    parser.addoption('--benchmark-disable', action='store_true', default='-', help=stub_help)
+    parser.addoption('--benchmark-columns', action='store', default='', help=stub_help)
+    parser.addoption('--benchmark-group-by', action='store', default='', help=stub_help)
+    parser.addoption('--benchmark-warmup', action='store', default='', help=stub_help)
+    parser.addoption('--benchmark-disable', action='store_true', default='', help=stub_help)
     parser.addoption(
         '--benchmark-save',
         action='store',
-        default='-',
+        default='',
         help='pytest-speed stub for pytest-benchmark, value is ignored, but if set, benchmarks are saved',
     )
     parser.addoption(

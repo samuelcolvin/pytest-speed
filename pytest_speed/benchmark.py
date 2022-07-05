@@ -183,11 +183,12 @@ class BenchmarkTable:
 
         self.table = Table(title=' '.join(t for t in title if t), padding=(0, 2), expand=True, border_style='cyan')
         self.benchmarks = benchmarks
+        min_time = min(bm.best_ns / bm.iter_per_round for bm in benchmarks)
+        self.units, self.div = calc_div_units(min_time)
         self.group_best: Optional[float] = None
 
     def print(self) -> None:
         show_groups = any(bm.group for bm in self.benchmarks)
-        self._prepare_units()
 
         if show_groups:
             self.table.add_column('Group', style='bold')
@@ -247,10 +248,6 @@ class BenchmarkTable:
             f'{benchmark.rounds * benchmark.iter_per_round:,}',
             self._row_note(benchmark),
         )
-
-    def _prepare_units(self) -> None:
-        min_time = min(bm.best_ns / bm.iter_per_round for bm in self.benchmarks)
-        self.units, self.div = calc_div_units(min_time)
 
     def _render_time(self, ns: float) -> str:
         return render_time(ns, '', self.div)
