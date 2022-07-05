@@ -5,38 +5,46 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from .save import load_all_benchmarks
+from .save import load_benchmarks
 from .utils import benchmark_change, calc_div_units, format_ts, group_benchmarks, render_time
+from .version import VERSION
 
 if TYPE_CHECKING:
     from .benchmark import Benchmark
 
 
 @click.group()
+@click.version_option(VERSION)
 def cli() -> None:
+    """
+    CLI for pytest-speed, can be used to list saved benchmarks and compare two benchmarks.
+    """
     pass
 
 
 @cli.command(name='list')
 def list_() -> None:
-    benchmark_summaries = load_all_benchmarks()
+    """
+    List all saved benchmarks.
+    """
+    benchmark_summaries = load_benchmarks()
     console = Console()
     table = Table(title='Saved Benchmarks', padding=(0, 2), border_style='cyan')
 
     table.add_column('ID', style='bold')
-    table.add_column('Branch')
     table.add_column('Timestamp')
+    table.add_column('Branch')
     table.add_column('Commit SHA')
     table.add_column('Commit Message')
-    table.add_column('Benchmarks')
+    table.add_column('Benchmarks', justify='right')
 
     now = datetime.now()
     benchmark_summaries.sort(key=lambda bs_: bs_.id)
     for bs in benchmark_summaries:
         table.add_row(
             f'{bs.id:03d}',
-            bs.git.branch,
             format_ts(bs.timestamp, now),
+            bs.git.branch,
             f'{bs.git.commit[:7]}{" [dirty]" if bs.git.dirty else ""}',
             bs.git.commit_message,
             f'{len(bs.benchmarks):,}',
@@ -48,7 +56,12 @@ def list_() -> None:
 @click.argument('id_before', type=int)
 @click.argument('id_after', type=int)
 def compare(id_before: int, id_after: int) -> None:
-    benchmark_summaries = load_all_benchmarks()
+    """
+    Load two benchmarks and compare them.
+
+    IDs should match those from the "ID" column of `pytest-speed list`.
+    """
+    benchmark_summaries = load_benchmarks()
     try:
         bm_before = next(bm for bm in benchmark_summaries if bm.id == id_before)
     except StopIteration:

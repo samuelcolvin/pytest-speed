@@ -1,6 +1,4 @@
 import json
-import multiprocessing
-import platform
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -17,22 +15,9 @@ benchmark_save_dir = Path('.benchmarks/speed')
 
 def save_benchmarks(benchmarks: 'List[Benchmark]', config: 'BenchmarkConfig', git: GitSummary) -> Tuple[int, str]:
     """
-    save benchmarks to file in a format which attempts to match pytest-benchmark
+    save benchmarks to file.
     """
     data: Dict[str, Any] = {
-        'machine_info': {
-            'node': platform.node(),
-            'processor': platform.processor(),
-            'machine': platform.machine(),
-            'python_compiler': platform.python_compiler(),
-            'python_implementation': platform.python_implementation(),
-            'python_implementation_version': platform.python_implementation(),
-            'python_version': platform.python_version(),
-            'python_build': platform.python_build(),
-            'release': platform.release(),
-            'system': platform.system(),
-            'cpu': {'count': multiprocessing.cpu_count()},
-        },
         'timestamp': datetime.now().isoformat(),
         'git_info': asdict(git),
         'config': asdict(config),
@@ -43,6 +28,7 @@ def save_benchmarks(benchmarks: 'List[Benchmark]', config: 'BenchmarkConfig', gi
     else:
         bm_id = 1
         benchmark_save_dir.mkdir(parents=True)
+
     data['id'] = bm_id
     path = benchmark_save_dir / f'bench{bm_id:03d}.json'
     with path.open('w') as f:
@@ -59,7 +45,7 @@ class BenchmarkSummary:
     benchmarks: 'List[Benchmark]'
 
 
-def load_all_benchmarks() -> 'List[BenchmarkSummary]':
+def load_benchmarks() -> 'List[BenchmarkSummary]':
     from .benchmark import Benchmark, BenchmarkConfig
 
     benchmark_summaries = []

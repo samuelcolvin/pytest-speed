@@ -5,6 +5,9 @@ import pytest
 import rich
 
 from .benchmark import Benchmark, BenchmarkCollection, BenchmarkConfig
+from .version import VERSION
+
+__version__ = VERSION
 
 
 def pytest_configure(config: Any) -> None:
