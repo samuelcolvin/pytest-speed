@@ -4,9 +4,9 @@ build-backend = 'setuptools.build_meta'
 
 [project]
 name = 'pytest-speed'
-version = '0.1'
+version = '0.2'
 description = 'Modern benchmarking library for python with pytest integration.'
-authors = [{name = 'Samuel Colvin', email =  's@muelcolvin.com'}]
+authors = [{name = 'Samuel Colvin', email = 's@muelcolvin.com'}]
 readme = 'README.md'
 license = {text = 'MIT'}
 classifiers = [
@@ -44,7 +44,7 @@ speed = 'pytest_speed'
 pytest-speed = "pytest_speed.cli:cli"
 
 [project.urls]
-repository = 'https://github.com/samuelcolvin/dirty-equals'
+repository = 'https://github.com/samuelcolvin/pytest-speed'
 
 [tool.pytest.ini_options]
 testpaths = 'tests'
