@@ -1,11 +1,14 @@
-[tool.poetry]
+[build-system]
+requires = ['setuptools', 'setuptools-scm']
+build-backend = 'setuptools.build_meta'
+
+[project]
 name = 'pytest-speed'
-version = '0'
+version = '0.1'
 description = 'Modern benchmarking library for python with pytest integration.'
-authors = ['Samuel Colvin <s@muelcolvin.com>']
+authors = [{name = 'Samuel Colvin', email =  's@muelcolvin.com'}]
 readme = 'README.md'
-repository = 'https://github.com/samuelcolvin/dirty-equals'
-license = 'MIT'
+license = {text = 'MIT'}
 classifiers = [
     'Development Status :: 3 - Alpha',
     'Framework :: Pytest',
@@ -28,19 +31,16 @@ classifiers = [
     'Topic :: Internet',
     'Typing :: Typed',
 ]
-
-[tool.poetry.dependencies]
-python = '^3.7.0'
-
-[build-system]
-requires = ['poetry-core']
-build-backend = 'poetry.core.masonry.api'
-
-[tool.poetry-version-plugin]
-source = 'init'
-
-[tool.poetry.plugins.pytest11]
+requires-python = '>=3.7'
+dependencies = [
+    'pytest>=7',
+    'rich>=12',
+]
+[project.entry-points.pytest11]
 speed = 'pytest_speed'
+
+[project.urls]
+repository = 'https://github.com/samuelcolvin/dirty-equals'
 
 [tool.pytest.ini_options]
 testpaths = 'tests'

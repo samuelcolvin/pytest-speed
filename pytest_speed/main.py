@@ -2,7 +2,7 @@ import subprocess
 from dataclasses import dataclass
 from statistics import mean, stdev
 from time import perf_counter_ns
-from typing import Optional, Any, Callable, Sequence, Tuple, List
+from typing import Optional, Any, Callable, Sequence, Tuple, List, Union
 
 from rich.console import Console
 from rich.table import Table
@@ -24,9 +24,9 @@ class BenchmarkConfig:
     high_percentage = 10
 
     ideal_rounds = 100
-    min_rounds = 30
+    min_rounds = 10
     ideal_iterations = 10_000
-    min_iterations = 1_000
+    min_iterations = 200
 
 
 @dataclass
@@ -45,6 +45,19 @@ class Benchmark:
     iter_per_round: int
     high_rounds: int
     warnings: Sequence[str] = ()
+
+    def summary(self):
+        best_ns = self.best_ns / self.iter_per_round
+        units, div = calc_div_units(best_ns)
+        parts = dict(
+            group=self.group,
+            name=self.name,
+            best=render_time(best_ns, units, div),
+            stdev=render_time(self.stddev_ns / self.iter_per_round, units, div),
+            iterations=f'{self.rounds * self.iter_per_round:,}',
+            warnings=', '.join(self.warnings),
+        )
+        return ' '.join(f'[blue]{k}[/blue]=[green]{v}[/green]' for k, v in parts.items() if v)
 
 
 class BenchmarkRun:
@@ -90,7 +103,7 @@ class BenchmarkRun:
 
         high_prop = high_rounds / rounds
         if high_prop > 0.1:
-            warnings.append(f'{high_prop:0.2%} of iterations are high!')
+            warnings.append(f'{high_prop:0.2%} of iterations are high')
 
         benchmark = Benchmark(
             name=name,
@@ -124,7 +137,7 @@ class BenchmarkRun:
 
         mean_warmup = mean(times)
         del times
-        # we want to run 100 rounds of iterations, each group consisting of up to 10_000 iterations
+        # we want to run ideal_rounds rounds of iterations, each group consisting of up to ideal_iterations iterations
         # we want them to finish in less than max_time_ns
         # that means each round should take max_time_ns / ideal_rounds
 
@@ -133,12 +146,12 @@ class BenchmarkRun:
 
         rounds = self.config.ideal_rounds
         if iter_per_round < self.config.min_iterations:
-            iter_per_round = self.config.min_iterations
-            rounds = max(self.config.min_rounds, int(self.config.max_time_ns / (mean_warmup * iter_per_round)))
-
+            rounds = self.config.min_rounds
+            round_time = self.config.max_time_ns / rounds
+            iter_per_round = max(self.config.min_iterations, int(round_time / mean_warmup))
         return iter_per_round, rounds
 
-    def print_table(self):
+    def print_results(self):
         if not self.benchmarks:
             print('No benchmarks run')
             return
@@ -179,17 +192,11 @@ class BenchmarkRun:
             self.group_best = best_ns
             group_col = self.current_group
             rel = ''
-            if group_in_last:
-                # just one item in the group, no style
-                row_style = None
-            else:
-                row_style = 'green'
+            # if just one item in the group, no style
+            row_style = 'normal' if group_in_last else 'green'
         else:
-            if group_in_last:
-                # worst in group
-                row_style = 'red'
-            else:
-                row_style = 'cyan'
+            # show the worse result in red
+            row_style = 'red' if group_in_last else 'cyan'
             group_col = ''
             if best_ns > self.group_best * 2:
                 rel = f'x{best_ns / self.group_best:0.2f}'
@@ -198,7 +205,7 @@ class BenchmarkRun:
 
         self.table.add_row(
             group_col,
-            Text(benchmark.name, style=row_style),
+            Text(benchmark.name or '(no name)', style=row_style),
             Text(self._render_time(best_ns), style=row_style),
             Text(rel, style=row_style),
             Text(self._render_time(benchmark.stddev_ns / benchmark.iter_per_round), style=row_style),
@@ -209,7 +216,7 @@ class BenchmarkRun:
 
     def _add_no_group_row(self, benchmark: Benchmark):
         self.table.add_row(
-            benchmark.name,
+            benchmark.name or '(no name)',
             self._render_time(benchmark.best_ns / benchmark.iter_per_round),
             self._render_time(benchmark.stddev_ns / benchmark.iter_per_round),
             f'{benchmark.rounds * benchmark.iter_per_round:,}',
@@ -218,31 +225,15 @@ class BenchmarkRun:
 
     def _prepare_units(self):
         min_time = min(bm.best_ns / bm.iter_per_round for bm in self.benchmarks)
-        if min_time < 1_000:
-            self.units = 'ns'
-            self.div = 1
-        elif min_time < 1_000_000:
-            self.units = 'µs'
-            self.div = 1_000
-        elif min_time < 1_000_000_000:
-            self.units = 'ms'
-            self.div = 1_000_000
-        else:
-            self.units = 's'
-            self.div = 1_000_000_000
+        self.units, self.div = calc_div_units(min_time)
 
     def _render_time(self, ns) -> str:
-        value = ns / self.div
-        if value < 1:
-            dp = 3
-        else:
-            dp = 2 if value < 100 else 1
-        return f'{value:.{dp}f}'
+        return render_time(ns, '', self.div)
 
     @staticmethod
-    def _row_note(benchmark: Benchmark) -> str:
+    def _row_note(benchmark: Benchmark) -> Union[str, Text]:
         if benchmark.warnings:
-            return '\n'.join(benchmark.warnings)
+            return Text('\n'.join(benchmark.warnings), style='red')
         else:
             return ''
 
@@ -257,3 +248,23 @@ def git_summary() -> Tuple[str, str]:
         return branch, ''
     commit = p.stdout.strip()
     return branch, commit[:7]
+
+
+def render_time(time_ns: float, units: str, div: int) -> str:
+    value = time_ns / div
+    if value < 1:
+        dp = 3
+    else:
+        dp = 2 if value < 100 else 1
+    return f'{value:.{dp}f}{units}'
+
+
+def calc_div_units(time_ns: float) -> Tuple[str, int]:
+    if time_ns < 1_000:
+        return 'ns', 1
+    elif time_ns < 1_000_000:
+        return 'µs', 1_000
+    elif time_ns < 1_000_000_000:
+        return 'ms', 1_000_000
+    else:
+        return 's', 1_000_000_000
