@@ -16,7 +16,7 @@ format:
 
 .PHONY: lint
 lint:
-	flake8 --max-complexity 14 --max-line-length 120 --ignore E203,W503 pytest_speed tests
+	flake8 --max-complexity 12 --max-line-length 120 --ignore E203,W503 pytest_speed tests
 	$(isort) --check-only --df
 	$(black) --check
 

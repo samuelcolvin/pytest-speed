@@ -4,7 +4,7 @@ build-backend = 'setuptools.build_meta'
 
 [project]
 name = 'pytest-speed'
-version = '0.2'
+version = '0.3'
 description = 'Modern benchmarking library for python with pytest integration.'
 authors = [{name = 'Samuel Colvin', email = 's@muelcolvin.com'}]
 readme = 'README.md'

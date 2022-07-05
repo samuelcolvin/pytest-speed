@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from statistics import mean, stdev
 from time import perf_counter_ns
 from typing import Any, Callable, List, Optional, Sequence, Tuple, Union, cast
@@ -8,10 +9,10 @@ from rich.markup import escape
 from rich.table import Table
 from rich.text import Text
 
-from .save import save_benchmarks
-from .utils import GitSummary, benchmark_change, calc_div_units, group_benchmarks, render_time
+from .save import BenchmarkSummary, save_benchmarks
+from .utils import GitSummary, benchmark_change, calc_div_units, format_ts, group_benchmarks, render_time
 
-__args__ = 'BenchmarkConfig', 'Benchmark', 'BenchmarkRun'
+__args__ = 'BenchmarkConfig', 'Benchmark', 'BenchmarkRun', 'BenchmarkTable', 'compare_benchmarks'
 
 
 @dataclass
@@ -74,11 +75,6 @@ class BenchmarkCollection:
         self.config = config
         self.save = save
         self.benchmarks: list[Benchmark] = []
-        # these are updated later by _prepare_units
-        self.units = 's'
-        self.div = 1_000_000_000
-        self.table = Table()
-        self.group_best: Optional[float] = None
         self.git = GitSummary.build()
 
     def run_benchmark(self, name: str, group: Optional[str], func: Callable[..., Any], *args: Any) -> Benchmark:
@@ -165,14 +161,31 @@ class BenchmarkCollection:
             return
 
         console = Console()
-        title = ['Benchmarks', str(self.git)]
         if self.save:
             bm_id, save_path = save_benchmarks(self.benchmarks, self.config, self.git)
-            title.append(f'Save ID: [blue]{bm_id:03d}[/blue]')
             console.print(f'[italic][dim]Saved benchmarks to [/dim][cyan]{escape(save_path)}[/cyan][dim].[/dim]')
+        else:
+            bm_id = None
+
+        BenchmarkTable(console, self.git, self.benchmarks, bm_id).print()
+
+
+class BenchmarkTable:
+    """
+    Logic for printing a table summarising benchmarks.
+    """
+
+    def __init__(self, console: Console, git: GitSummary, benchmarks: List[Benchmark], bm_id: Optional[int] = None):
+        self.console = console
+        title = ['Benchmarks', str(git)]
+        if bm_id is not None:
+            title.append(f'Save ID: [blue]{bm_id:03d}[/blue]')
 
         self.table = Table(title=' '.join(t for t in title if t), padding=(0, 2), expand=True, border_style='cyan')
+        self.benchmarks = benchmarks
+        self.group_best: Optional[float] = None
 
+    def print(self) -> None:
         show_groups = any(bm.group for bm in self.benchmarks)
         self._prepare_units()
 
@@ -198,7 +211,7 @@ class BenchmarkCollection:
             for bm in self.benchmarks:
                 self._add_no_group_row(bm)
 
-        console.print(self.table)
+        self.console.print(self.table)
 
     def _add_group_row(self, first_in_group: bool, last_in_group: bool, benchmark: Benchmark) -> None:
         best_ns = benchmark.best_ns / benchmark.iter_per_round
@@ -248,3 +261,83 @@ class BenchmarkCollection:
             return Text('\n'.join(benchmark.warnings), style='red')
         else:
             return ''
+
+
+def compare_benchmarks(before: BenchmarkSummary, after: BenchmarkSummary) -> None:
+    """
+    Compare two sets of benchmarks.
+    """
+    now = datetime.now()
+    console = Console()
+    table = Table(title='Benchmarks being compared', title_justify='left', padding=(0, 2), border_style='cyan')
+    table.add_column('', style='bold')
+    table.add_column('Before')
+    table.add_column('After')
+    table.add_row('ID', f'{before.id:03d}', f'{after.id:03d}')
+    table.add_row('Branch', before.git.branch, after.git.branch)
+    table.add_row('Commit SHA', before.git.commit[:7], after.git.commit[:7])
+    table.add_row('Commit Message', before.git.commit_message, after.git.commit_message)
+    table.add_row('Benchmark Timestamp', format_ts(before.timestamp, now), format_ts(after.timestamp, now))
+
+    console.print('')
+    console.print(table)
+
+    min_time = min(
+        [bm.best_ns / bm.iter_per_round for bm in before.benchmarks]
+        + [bm.best_ns / bm.iter_per_round for bm in after.benchmarks]
+    )
+    units, div = calc_div_units(min_time)
+
+    table = Table(title='Benchmarks Comparison', title_justify='left', padding=(0, 2), border_style='cyan')
+    table.add_column('Group', style='bold')
+    table.add_column('Benchmark')
+    table.add_column(f'Before ({units}/iter)', justify='right')
+    table.add_column(f'After ({units}/iter)', justify='right')
+    table.add_column('Change', justify='right')
+
+    test_keys = set()
+    after_lookup = {benchmark_key(bm): bm for bm in after.benchmarks}
+    before_not_after = 0
+
+    for bm_group in group_benchmarks(before.benchmarks).values():
+        for index, bm in enumerate(bm_group):
+            key = benchmark_key(bm)
+            after_bm = after_lookup.get(key)
+            test_keys.add(key)
+            before_ns = bm.best_ns / bm.iter_per_round
+
+            group_name = (bm.group or '') if index == 0 else ''
+            end_section = index == len(bm_group) - 1
+            if after_bm:
+                after_ns = after_bm.best_ns / after_bm.iter_per_round
+                style = None
+                if after_ns > before_ns * 1.1:
+                    style = 'red'
+                elif after_ns < before_ns * 0.9:
+                    style = 'green'
+                table.add_row(
+                    group_name,
+                    bm.name,
+                    render_time(before_ns, '', div),
+                    render_time(after_ns, '', div),
+                    benchmark_change(before_ns, after_ns),
+                    style=style,
+                    end_section=end_section,
+                )
+            else:
+                before_not_after += 1
+
+    console.print('')
+    console.print(table)
+    if before_not_after:
+        console.print(f'{before_not_after} benchmarks in before but not after.', style='red')
+    after_not_before = sum(benchmark_key(bm) not in test_keys for bm in after.benchmarks)
+    if after_not_before:
+        console.print(f'{after_not_before} benchmarks in after but not before.', style='red')
+
+
+def benchmark_key(bm: 'Benchmark') -> str:
+    if bm.group:
+        return f'{bm.group}:{bm.name}'
+    else:
+        return bm.name

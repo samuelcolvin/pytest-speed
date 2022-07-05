@@ -1,4 +1,5 @@
 import json
+import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -9,7 +10,7 @@ from .utils import GitSummary
 if TYPE_CHECKING:
     from .benchmark import Benchmark, BenchmarkConfig
 
-__args__ = 'save_benchmarks', 'load_all_benchmarks', 'BenchmarkSummary'
+__args__ = 'save_benchmarks', 'load_all_benchmarks', 'load_benchmark', 'BenchmarkSummary'
 benchmark_save_dir = Path('.benchmarks/speed')
 
 
@@ -45,19 +46,26 @@ class BenchmarkSummary:
     benchmarks: 'List[Benchmark]'
 
 
-def load_benchmarks() -> 'List[BenchmarkSummary]':
-    from .benchmark import Benchmark, BenchmarkConfig
-
+def load_all_benchmarks() -> List[BenchmarkSummary]:
     benchmark_summaries = []
     for path in benchmark_save_dir.glob('bench*'):
-        with path.open() as f:
-            data = json.load(f)
-        bms = BenchmarkSummary(
-            id=data['id'],
-            timestamp=datetime.fromisoformat(data['timestamp']),
-            config=BenchmarkConfig(**data['config']),
-            git=GitSummary(**data['git_info']),
-            benchmarks=[Benchmark(**bm) for bm in data['benchmarks']],
-        )
-        benchmark_summaries.append(bms)
+        m = re.search(r'bench(\d+)', path.name)
+        if m:
+            benchmark_id = int(m.group(1))
+            benchmark_summaries.append(load_benchmark(benchmark_id))
     return benchmark_summaries
+
+
+def load_benchmark(benchmark_id: int) -> BenchmarkSummary:
+    from .benchmark import Benchmark, BenchmarkConfig
+
+    path = benchmark_save_dir / f'bench{benchmark_id:03d}.json'
+    with path.open() as f:
+        data = json.load(f)
+    return BenchmarkSummary(
+        id=data['id'],
+        timestamp=datetime.fromisoformat(data['timestamp']),
+        config=BenchmarkConfig(**data['config']),
+        git=GitSummary(**data['git_info']),
+        benchmarks=[Benchmark(**bm) for bm in data['benchmarks']],
+    )
