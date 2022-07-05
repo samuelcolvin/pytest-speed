@@ -4,11 +4,13 @@ from typing import Optional
 import pytest
 import rich
 
-from .main import BenchmarkRun, BenchmarkConfig
+from .main import BenchmarkConfig, BenchmarkRun
 
 
 def pytest_configure(config):
-    config.addinivalue_line('markers', 'benchmark: pytest-speed marker to define benchmark groups (compatible with pytest-benchmark)')
+    config.addinivalue_line(
+        'markers', 'benchmark: pytest-speed marker to define benchmark groups (compatible with pytest-benchmark)'
+    )
     config.addinivalue_line('markers', 'speed: pytest-speed marker to define benchmark groups')
 
 
@@ -20,27 +22,37 @@ def pytest_addoption(parser):
     parser.addoption('--benchmark-group-by', action='store', default='-', help=stub_help)
     parser.addoption('--benchmark-warmup', action='store', default='-', help=stub_help)
     parser.addoption('--benchmark-disable', action='store_true', default='-', help=stub_help)
-    parser.addoption('--benchmark-enable', action='store_true', default=False, help='alias for "--bench", compatible with pytest-benchmark')
-    parser.addoption('--bench', action='store_true', default=False, help='run benchmarks')
+    parser.addoption(
+        '--benchmark-enable',
+        dest='bench',
+        action='store_true',
+        default=False,
+        help='alias for "--bench", compatible with pytest-benchmark - enable benchmarks',
+    )
+    parser.addoption('--bench', action='store_true', default=False, help='enable benchmarks')
 
 
 benchmarks: Optional[BenchmarkRun] = None
 
 
 @pytest.fixture(scope='session')
-def benchmark_run():
-    global benchmarks
-    benchmarks = BenchmarkRun(BenchmarkConfig())
-    return benchmarks
+def benchmark_run(request):
+    if request.config.getoption('bench'):
+        global benchmarks
+        benchmarks = BenchmarkRun(BenchmarkConfig())
+        return benchmarks
 
 
 @pytest.fixture
-def benchmark(request, capsys, benchmark_run: BenchmarkRun):
+def bench(request, capsys, benchmark_run: Optional[BenchmarkRun]):
     verbose_level = request.config.getoption('verbose')
     call_index = 0
 
     def run_benchmark(func, *args, name: str = None, group: str = None):
         nonlocal call_index
+        if benchmark_run is None:
+            func(*args)
+            return
 
         test_name = re.sub('^test_', '', request.node.name)
         if name is not None:
@@ -63,6 +75,14 @@ def benchmark(request, capsys, benchmark_run: BenchmarkRun):
         return benchmark
 
     return run_benchmark
+
+
+@pytest.fixture
+def benchmark(bench):
+    """
+    Compatibility with pytest-benchmark
+    """
+    return bench
 
 
 def pytest_terminal_summary():

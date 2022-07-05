@@ -2,12 +2,11 @@ import subprocess
 from dataclasses import dataclass
 from statistics import mean, stdev
 from time import perf_counter_ns
-from typing import Optional, Any, Callable, Sequence, Tuple, List, Union
+from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
-
 
 __args__ = 'BenchmarkConfig', 'Benchmark', 'BenchmarkRun'
 
@@ -17,6 +16,7 @@ class BenchmarkConfig:
     """
     Store configuration info for benchmarking
     """
+
     warmup_time_ns = 1_000_000_000
     warmup_max_iterations = 5_000
     max_rounds = 10_000
@@ -34,6 +34,7 @@ class Benchmark:
     """
     Store results of a single benchmark.
     """
+
     name: str
     group: Optional[str]
     best_ns: int
@@ -64,6 +65,7 @@ class BenchmarkRun:
     """
     Manage a benchmark run and store data about it.
     """
+
     def __init__(self, config: BenchmarkConfig):
         self.config = config
         self.benchmarks: list[Benchmark] = []
@@ -71,7 +73,6 @@ class BenchmarkRun:
         self.units = 's'
         self.div = 1_000_000_000
         self.table = Table()
-        self.current_group = None
         self.group_best = None
 
     def run_benchmark(self, name: str, group: Optional[str], func: Callable[[...], Any], *args: Any) -> Benchmark:
@@ -172,36 +173,46 @@ class BenchmarkRun:
         self.table.add_column('Iterations', justify='right')
         self.table.add_column('Note')
 
-        self.benchmarks.sort(key=lambda bm: (bm.group, bm.mean_ns))
+        if show_groups:
+            groups = {}
+            for bm in self.benchmarks:
+                group = groups.get(bm.group)
+                if group:
+                    group.append(bm)
+                else:
+                    groups[bm.group] = [bm]
 
-        for (index, benchmark) in enumerate(self.benchmarks):
-            if show_groups:
-                self._add_group_row(index, benchmark)
-            else:
-                self._add_no_group_row(benchmark)
+            for bm_group in groups.values():
+                group_len = len(bm_group)
+                bm_group.sort(key=lambda bm: bm.best_ns / bm.iter_per_round)
+                for index, bm in enumerate(bm_group):
+                    self._add_group_row(index == 0, index + 1 == group_len, bm)
+
+            self.benchmarks.sort(key=lambda bm: (bm.group, bm.best_ns / bm.iter_per_round))
+        else:
+            for bm in self.benchmarks:
+                self._add_no_group_row(bm)
 
         console = Console()
         console.print(self.table)
 
-    def _add_group_row(self, index: int, benchmark: Benchmark):
-        group_in_last = index + 1 >= len(self.benchmarks) or self.benchmarks[index + 1].group != benchmark.group
+    def _add_group_row(self, first_in_group: bool, last_in_group: bool, benchmark: Benchmark):
         best_ns = benchmark.best_ns / benchmark.iter_per_round
-        if benchmark.group != self.current_group:
+        if first_in_group:
             # new group
-            self.current_group = benchmark.group
             self.group_best = best_ns
-            group_col = self.current_group
+            group_col = benchmark.group
             rel = ''
             # if just one item in the group, no style
-            row_style = 'normal' if group_in_last else 'green'
+            row_style = 'normal' if last_in_group else 'green'
         else:
             # show the worse result in red
-            row_style = 'red' if group_in_last else 'cyan'
+            row_style = 'red' if last_in_group else 'cyan'
             group_col = ''
             if best_ns > self.group_best * 2:
                 rel = f'x{best_ns / self.group_best:0.2f}'
             else:
-                rel = f'+{(best_ns - self.group_best) / self.group_best:0.2%}'
+                rel = f'{(best_ns - self.group_best) / self.group_best:+0.2%}'
 
         self.table.add_row(
             group_col,
@@ -211,7 +222,7 @@ class BenchmarkRun:
             Text(self._render_time(benchmark.stddev_ns / benchmark.iter_per_round), style=row_style),
             Text(f'{benchmark.rounds * benchmark.iter_per_round:,}', style=row_style),
             self._row_note(benchmark),
-            end_section=group_in_last,
+            end_section=last_in_group,
         )
 
     def _add_no_group_row(self, benchmark: Benchmark):
