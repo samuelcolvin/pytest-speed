@@ -34,10 +34,14 @@ classifiers = [
 requires-python = '>=3.7'
 dependencies = [
     'pytest>=7',
+    'click>=7',
     'rich>=12',
 ]
 [project.entry-points.pytest11]
 speed = 'pytest_speed'
+
+[project.scripts]
+pytest-speed = "pytest_speed.cli:cli"
 
 [project.urls]
 repository = 'https://github.com/samuelcolvin/dirty-equals'
