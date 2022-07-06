@@ -181,7 +181,9 @@ class BenchmarkTable:
         if bm_id is not None:
             title.append(f'Save ID: [blue]{bm_id:03d}[/blue]')
 
-        self.table = Table(title=' '.join(t for t in title if t), padding=(0, 2), expand=True, border_style='cyan')
+        self.table = Table(
+            title=' '.join(t for t in title if t), padding=(0, 2), expand=True, min_width=120, border_style='cyan'
+        )
         self.benchmarks = benchmarks
         min_time = min(bm.best_ns / bm.iter_per_round for bm in benchmarks)
         self.units, self.div = calc_div_units(min_time)
