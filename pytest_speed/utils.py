@@ -1,7 +1,9 @@
+import re
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from textwrap import shorten
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
@@ -15,6 +17,7 @@ class GitSummary:
     commit: str = ''
     commit_message: str = ''
     dirty: bool = False
+    # TODO parent and commit timestamp
 
     def __str__(self) -> str:
         if self.found:
@@ -48,6 +51,10 @@ class GitSummary:
         commit_message = p.stdout.strip()
         return cls(True, branch, commit, commit_message, dirty)
 
+    def short_message(self) -> str:
+        comment = re.sub(r'^\s*(\*\s*)?', '', self.commit_message, flags=re.M)
+        return shorten(re.sub(r'\n\s*', ' ', comment), 50, placeholder='…')
+
 
 def render_time(time_ns: float, units: str, div: int) -> str:
     value = time_ns / div
@@ -55,7 +62,7 @@ def render_time(time_ns: float, units: str, div: int) -> str:
         dp = 3
     else:
         dp = 2 if value < 100 else 1
-    return f'{value:.{dp}f}{units}'
+    return f'{value:_.{dp}f}{units}'
 
 
 def benchmark_change(before: float, after: float) -> str:

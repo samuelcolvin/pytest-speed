@@ -28,7 +28,7 @@ def list_() -> None:
     console = Console()
     table = Table(title='Saved Benchmarks', padding=(0, 2), border_style='cyan')
 
-    table.add_column('ID', style='bold')
+    table.add_column('ID', style='bold', justify='right')
     table.add_column('Timestamp')
     table.add_column('Branch')
     table.add_column('Commit SHA')
@@ -39,11 +39,11 @@ def list_() -> None:
     benchmark_summaries.sort(key=lambda bs_: bs_.id)
     for bs in benchmark_summaries:
         table.add_row(
-            f'{bs.id:03d}',
+            f'{bs.id:d}',
             format_ts(bs.timestamp, now),
             bs.git.branch,
             f'{bs.git.commit[:7]}{" [dirty]" if bs.git.dirty else ""}',
-            bs.git.commit_message,
+            bs.git.short_message(),
             f'{len(bs.benchmarks):,}',
         )
     console.print(table)

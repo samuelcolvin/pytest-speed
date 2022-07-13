@@ -179,7 +179,7 @@ class BenchmarkTable:
         self.console = console
         title = ['Benchmarks', str(git)]
         if bm_id is not None:
-            title.append(f'Save ID: [blue]{bm_id:03d}[/blue]')
+            title.append(f'Save ID: [blue]{bm_id:d}[/blue]')
 
         self.table = Table(title=' '.join(t for t in title if t), padding=(0, 2), expand=True, border_style='cyan')
         self.benchmarks = benchmarks
