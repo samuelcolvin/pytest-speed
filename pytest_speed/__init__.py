@@ -1,5 +1,5 @@
 import re
-from typing import Any, Callable, Optional, Protocol
+from typing import Any, Callable, Optional, Protocol, Union
 
 import pytest
 import rich
@@ -47,8 +47,8 @@ benchmarks: Optional[BenchmarkCollection] = None
 
 class RunBench(Protocol):
     def __call__(
-        self, func: Callable[..., Any], *args: Any, name: Optional[str] = None, group: Optional[str] = None
-    ) -> Optional[Benchmark]:
+        self, *args: Any, name: Optional[str] = None, group: Optional[str] = None
+    ) -> Union[None, Benchmark, Callable[[Callable[[], None]], Optional[Benchmark]]]:
         ...
 
 
@@ -69,7 +69,7 @@ def bench(request: Any, capsys: Any, benchmark_collection: Optional[BenchmarkCol
     verbose_level = request.config.getoption('verbose')
     call_index = 0
 
-    def run(
+    def benchmark_func_logic(
         func: Callable[..., Any], *args: Any, name: Optional[str] = None, group: Optional[str] = None
     ) -> Optional[Benchmark]:
         nonlocal call_index
@@ -98,7 +98,18 @@ def bench(request: Any, capsys: Any, benchmark_collection: Optional[BenchmarkCol
                 rich.print(benchmark.summary(), end='')
         return benchmark
 
-    return run
+    def benchmark_func_wrapper(
+        *args: Any, name: Optional[str] = None, group: Optional[str] = None
+    ) -> Union[None, Benchmark, Callable[[Callable[[], None]], Optional[Benchmark]]]:
+        if args:
+            return benchmark_func_logic(*args, name=name, group=group)
+        else:
+            def benchmark_wrapper(func: Callable[[], None]) -> Optional[Benchmark]:
+                return benchmark_func_logic(func, name=name, group=group)
+
+            return benchmark_wrapper
+
+    return benchmark_func_wrapper
 
 
 @pytest.fixture
